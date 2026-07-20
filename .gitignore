@@ -1,0 +1,85 @@
+# === Secrets / Env ===
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+
+# === Node ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# === Playwright / Test Artifacts ===
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# === Build Output ===
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# === Local Claude Code Settings ===
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/*.output
+.claude/*.tmp
+.claude/*.xlsx
+.claude/*.xls
+.claude/양식/
+
+# === Playwright auth state / Eclipse workspace ===
+.auth/
+.metadata/
+
+# === Local Backups (non-automation) ===
+_workspace/
+_workspace_*/
+
+# === Non test-automation directories (root-level only, so app/ subtrees are unaffected) ===
+/Servers/
+/src/
+/harnerss-test/
+/etc/
+# Nested WTP module folder — path added to .git/info/exclude (local-only) to avoid leaking name
+
+# === Java / Maven build artifacts (anywhere) ===
+target/
+*.class
+.classpath
+.project
+.settings/
+.factorypath
+
+# === Eclipse WTP ===
+.metadata/
+buildtmp/
+
+# === Excel lock files ===
+~$*.xlsx
+~$*.xls
+~$*.doc*
+
+# === IDE / OS ===
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# === Logs ===
+*.log
+logs/
+
+# === Scratch / Temp ===
+scratchpad/
+tmp/
+*.bak
+*.orig

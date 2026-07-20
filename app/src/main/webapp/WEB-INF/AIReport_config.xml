@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+<entry key="localeLang">ko</entry>
+<entry key="user.function.call">true</entry>
+<entry key="useAIFileUploader">true</entry>
+<entry key="logger.maxDays">15</entry>
+<entry key="logger.logDir">/data/logs/AIViewer65</entry>
+<entry key="tempDir">/common/ai65/temp</entry>
+<entry key="logger.debugEnabled">ture</entry>
+<entry key="parameterDecoder.useRequest">false</entry>
+<entry key="html.useExternalXerces">false</entry>
+<entry key="schedulerTimeZone">GMT+09:00</entry>
+<entry key="viewerPath">/common/ai65/AIViewer65</entry>
+<entry key="AES128parameter">true</entry>
+<entry key="fontDir"/>
+<entry key="useCategoryDir">true</entry>
+<entry key="parameterDecoder.defaultURIEncoding">UTF-8</entry>
+<entry key="homeDir">/common/ai65/AIReport65</entry>
+<entry key="enableAdminConsole">true</entry>
+</properties>
