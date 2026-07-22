@@ -1675,6 +1675,18 @@ public class SpecTemplateService {
         }
         String methodName     = extractMethodName(url);
         String menuId         = str(s, "menuId");   // CSRF 서버 세션 폼 등록용 (없으면 no-op)
+
+        // ── ensureSessionReady 의 pgmId 인자는 각 시나리오 자신의 sourceName 을 사용해야 한다.
+        //   파일 파라미터 sourceName 은 첫 시나리오 기준이라 다른 화면(예: HRM_0130M vs PUR_0910M)
+        //   시나리오가 섞이면 잘못된 폼이 등록되어 btn_search 클릭이 엉뚱한 getList.do 를 호출하고
+        //   실제 대상 URL 의 waitForResponse 는 타임아웃된다.
+        //   시나리오에 sourceName 이 없거나 숫자 뿐이면 URL 에서 재추출, 그것도 실패하면 파일 폴백 사용.
+        String tcSourceName = str(s, "sourceName");
+        if (tcSourceName.isEmpty() || tcSourceName.matches("\\d{1,4}")) {
+            String fromUrl = extractScreenFromUrl(url);
+            if (!fromUrl.isEmpty()) tcSourceName = fromUrl;
+        }
+        if (tcSourceName.isEmpty()) tcSourceName = sourceName;   // 최종 폴백 (기존 동작 유지)
         boolean isNegative    = "비정상".equals(crudType) || scenarioId.contains("_NEG");
         boolean usesSharedKey = boolVal(s, "usesSharedKey");
         String returnsKeyCol  = str(s, "returnsKeyCol");
@@ -1698,7 +1710,7 @@ public class SpecTemplateService {
           .append("] ").append(esc(testName)).append("', async ({ workerPage: page }) => {\n");
         sb.append("    logTestStart('[no:").append(no).append("] [단위] ").append(esc(testName)).append("');\n");
         sb.append("    const formKey = await ensureSessionReady(page, '").append(escTs(menuId))
-          .append("', '").append(escTs(sourceName)).append("');\n\n");
+          .append("', '").append(escTs(tcSourceName)).append("');\n\n");
 
         Map<String, Map<String, String>> inputSelector = getInputSelector(s);
         // 실제 버튼 id — ScenarioBuilderService가 gfn_tran(svcId) 호출을 추적해 채운 "btnId"를

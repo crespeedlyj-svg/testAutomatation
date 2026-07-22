@@ -1,7 +1,7 @@
 {
-  "name": "test",
+  "name": "test-automation",
   "version": "1.0.0",
-  "description": "단위, 통합테스트",
+  "description": "Nexacro Playwright 자동화 (단위 · 통합 · e2e 테스트)",
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",

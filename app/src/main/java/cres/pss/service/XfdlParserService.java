@@ -155,11 +155,22 @@ public class XfdlParserService {
 
     // ── gfn_tran 파싱 ────────────────────────────────────────────────────────
 
+    /** this.fnName = function(...) { ... } 선언 패턴 — 본문 범위를 괄호 카운팅으로 구한다 */
+    private static final Pattern P_FN_DECL = Pattern.compile(
+        "this\\.(\\w+)\\s*=\\s*function\\s*\\([^)]*\\)\\s*\\{");
+
     private void parseTranCalls(String content, Map<String, String> varMap,
                                  Set<String> seenUrls, List<TranCall> calls) {
+        // 함수별 [본문시작, 본문끝) 범위 + 이름 수집 — gfn_tran 호출이 어느 함수 안에 있는지,
+        // 그리고 그 함수가 실제로 어디선가 호출되는지(도달 가능한지) 판별하는 데 사용한다.
+        List<int[]>    fnRanges = new ArrayList<>();
+        List<String>   fnNames  = new ArrayList<>();
+        collectFunctionRanges(content, fnRanges, fnNames);
+
         // Pass 1: svcId = 문자열 리터럴
         Matcher m1 = P_GFN_TRAN_STR.matcher(content);
         while (m1.find()) {
+            if (!isReachable(content, m1.start(), fnRanges, fnNames)) continue;
             String url = m1.group(2).trim();
             if (!seenUrls.add(url)) continue;
             TranCall tc = new TranCall();
@@ -174,6 +185,7 @@ public class XfdlParserService {
         // Pass 2: svcId = 변수
         Matcher m2 = P_GFN_TRAN_VAR.matcher(content);
         while (m2.find()) {
+            if (!isReachable(content, m2.start(), fnRanges, fnNames)) continue;
             String varName = m2.group(1).trim();
             if (varName.equals("this") || varName.equals("null")
                 || varName.equals("true") || varName.equals("false")) continue;
@@ -187,6 +199,51 @@ public class XfdlParserService {
             tc.svcIdFromVar = true;
             calls.add(tc);
         }
+    }
+
+    /** content 내 모든 "this.fnName = function(...) { ... }" 선언의 본문 [시작,끝) 위치와 이름을 수집 */
+    private void collectFunctionRanges(String content, List<int[]> rangesOut, List<String> namesOut) {
+        Matcher m = P_FN_DECL.matcher(content);
+        while (m.find()) {
+            int braceStart = m.end() - 1; // '{' 위치
+            int depth = 0;
+            int i = braceStart;
+            for (; i < content.length(); i++) {
+                char c = content.charAt(i);
+                if (c == '{') depth++;
+                else if (c == '}') { depth--; if (depth == 0) break; }
+            }
+            int bodyEnd = Math.min(i + 1, content.length());
+            rangesOut.add(new int[]{braceStart, bodyEnd});
+            namesOut.add(m.group(1));
+        }
+    }
+
+    /**
+     * pos(gfn_tran 호출 위치)를 감싸는 "this.fnName = function" 함수를 찾아, 그 함수가
+     * 파일 어딘가에서 실제로 호출되는지(주석은 이미 제거된 content 기준) 확인한다.
+     * 감싸는 함수를 찾지 못하면(인라인 코드 등) 판별 불가로 보고 안전하게 true(포함) 반환한다.
+     *
+     * 예) hrm_0130M.xfdl의 fn_getAcctUntCdList()는 정의는 있지만 유일한 호출부
+     *     "//this.fn_getAcctUntCdList();"가 주석 처리돼 있어 실제로는 절대 실행되지 않는데,
+     *     예전에는 이런 죽은 함수 안의 gfn_tran까지 전부 시나리오로 뽑혀 나갔다.
+     */
+    private boolean isReachable(String content, int pos, List<int[]> fnRanges, List<String> fnNames) {
+        String enclosingFn = null;
+        int    bestSpan    = Integer.MAX_VALUE;
+        for (int i = 0; i < fnRanges.size(); i++) {
+            int[] r = fnRanges.get(i);
+            if (pos >= r[0] && pos < r[1]) {
+                int span = r[1] - r[0];
+                if (span < bestSpan) { bestSpan = span; enclosingFn = fnNames.get(i); }
+            }
+        }
+        if (enclosingFn == null) return true; // 감싸는 함수를 특정 못함 — 안전하게 포함
+
+        // "fnName(" 형태의 실제 호출부가 파일 어디든 존재하면 도달 가능하다고 본다.
+        // 선언부는 "= function(" 형태라 이 패턴에 매칭되지 않으므로 별도 제외 처리가 필요 없다.
+        Pattern callPat = Pattern.compile("\\b" + Pattern.quote(enclosingFn) + "\\s*\\(");
+        return callPat.matcher(content).find();
     }
 
     /** dataset 파라미터 → 실제 ds ID */

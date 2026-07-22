@@ -5,30 +5,10 @@
  * 기존 프로젝트의 tests/unit/, tests/integration/ 형식과 완전히 호환된다.
  */
 
-const NEXACRO_XML_FN = `
-function nexacroXml(datasets, pgmId) {
-  const dsXml = datasets.map(({ id, columns, rows = [] }) => {
-    const cols = columns.map(c => \`<Column id="\${c}" type="STRING" size="256"/>\`).join('');
-    const rowsXml = rows.map(row =>
-      \`<Row>\${columns.map(c => \`<Col id="\${c}">\${row[c] ?? ''}</Col>\`).join('')}</Row>\`
-    ).join('');
-    return \`<Dataset id="\${id}"><ColumnInfo>\${cols}</ColumnInfo><Rows>\${rowsXml}</Rows></Dataset>\`;
-  }).join('');
-  return (
-    \`<?xml version="1.0" encoding="utf-8"?>\` +
-    \`<Root xmlns="http://www.nexacroplatform.com/platform/dataset" ver="5.0.0.0">\` +
-    \`<Parameters><Parameter id="pgmId">\${pgmId}</Parameter></Parameters>\` +
-    \`<Datasets>\${dsXml}</Datasets></Root>\`
-  );
-}
-
-async function apiPost(page, endpoint, xml) {
-  return page.request.post(endpoint, {
-    headers: { 'Content-Type': 'text/xml; charset=utf-8' },
-    data: xml,
-  });
-}
-`.trim();
+// ── 2026-07-21: NEXACRO_XML_FN 인라인 상수 제거 ─────────────────────────────
+// 이전에는 spec 파일마다 nexacroXml + apiPost 정의를 인라인으로 삽입했으나,
+// 이제 spec은 `../utils/nexacro-api` 에서 헬퍼를 import 한다.
+// 실행 방식도 page.request.post → page.evaluate(fetch) 로 변경 (testCode_* 실사용 방식과 일치).
 
 function colConst(dsId) {
   return `DS_${dsId.toUpperCase()}_COLUMNS`;
@@ -67,13 +47,12 @@ import {
   logInput, logResult, logTestStart, flushLogs,
 } from '../utils/test-logger';
 import { assertNexacroResponse, parseNexacroXmlRows } from '../utils/nexacro-helper';
+import { nexacroXml, apiPost, ensureSessionReady } from '../utils/nexacro-api';
 
 const BASE_URL       = process.env.APP_BASE_URL ?? '';
 const SCREENSHOT_DIR = 'test-results/screenshots';
 
 ${dsConsts}
-
-${NEXACRO_XML_FN}
 
 // ============================================================================
 // [${sourceName}] 단위 테스트
@@ -369,13 +348,12 @@ import {
   logInput, logResult, logTestStart, flushLogs,
 } from '../utils/test-logger';
 import { assertNexacroResponse, parseNexacroXmlRows } from '../utils/nexacro-helper';
+import { nexacroXml, apiPost, ensureSessionReady } from '../utils/nexacro-api';
 
 const BASE_URL       = process.env.APP_BASE_URL ?? '';
 const SCREENSHOT_DIR = 'test-results/screenshots';
 
 ${dsConsts}
-
-${NEXACRO_XML_FN}
 
 test.beforeAll(async () => { fs.mkdirSync(SCREENSHOT_DIR, { recursive: true }); });
 test.afterAll(() => { flushLogs(); });

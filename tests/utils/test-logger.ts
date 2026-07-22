@@ -32,7 +32,13 @@ const C = {
   blue:    '\x1b[34m',
 };
 
-const LOG_FILE = path.join('test-results', 'test-data-log.json');
+// ── 2026-07-21: spec 간 덮어쓰기 방지 ─────────────────────────────────────
+// 이전에는 모듈 전역 logEntries + 고정 test-data-log.json 을 썼기 때문에,
+// 각 spec 의 afterAll → flushLogs 가 이전 spec 의 로그를 통째로 덮어쓰거나
+// 이어붙어서 소속이 뒤섞였다. flushLogs 호출 시점에 spec 파일 경로를 넘겨받아
+// spec 별 파일(test-data-log__{basename}.json)로 저장한다.
+const LOG_DIR = 'test-results';
+const DEFAULT_LOG_BASENAME = 'test-data-log';
 const logEntries: LogEntry[] = [];
 
 // 로그 타입별 아이콘 & 색상
@@ -134,12 +140,23 @@ export function logTestStart(testName: string): void {
 }
 
 /**
- * 누적된 로그를 JSON 파일로 저장
- * test.afterAll 또는 onEnd에서 호출
+ * 누적된 로그를 JSON 파일로 저장.
+ * test.afterAll 에서 호출한다. spec 파일 경로를 넘기면 그 파일명 기반으로 저장하고,
+ * 넘기지 않으면 기본 이름(test-data-log.json)에 저장한다.
+ *
+ *   test.afterAll(() => flushLogs(__filename));
+ *
+ * 저장 후 in-memory buffer(logEntries)는 비워져, 다음 spec 이 이어붙지 않는다.
  */
-export function flushLogs(): void {
-  const dir = path.dirname(LOG_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+export function flushLogs(specFilePath?: string): void {
+  if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+
+  const outFile = specFilePath
+    ? path.join(
+        LOG_DIR,
+        `${DEFAULT_LOG_BASENAME}__${path.basename(specFilePath).replace(/\.[jt]s$/i, '').replace(/\.spec$/i, '')}.json`
+      )
+    : path.join(LOG_DIR, `${DEFAULT_LOG_BASENAME}.json`);
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -147,6 +164,9 @@ export function flushLogs(): void {
     entries: logEntries,
   };
 
-  fs.writeFileSync(LOG_FILE, JSON.stringify(report, null, 2), 'utf-8');
-  console.log(`\n📁 테스트 데이터 로그 저장: ${LOG_FILE}`);
+  fs.writeFileSync(outFile, JSON.stringify(report, null, 2), 'utf-8');
+  console.log(`\n📁 테스트 데이터 로그 저장: ${outFile}`);
+
+  // 다음 spec 이 이 프로세스에서 실행될 때 이전 로그가 이어붙지 않도록 초기화
+  logEntries.length = 0;
 }

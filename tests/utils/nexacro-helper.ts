@@ -11,424 +11,18 @@
  *   app.mainframe.VFrameSet.HFrameSet.VFrameSet.FrameSet.MainFrame.main
  */
 
-import { Page, Frame, Response, expect } from '@playwright/test';
+import { Page, Response, expect } from '@playwright/test';
 
-export interface NexacroComponent {
-  name: string;
-  type: string;
-  value?: any;
-  visible?: boolean;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// 2026-07-21: 이 파일 상단에 있던 15개 레거시 Frame 기반 헬퍼
+//   (findNexacroFrame, isNexacroLoaded, waitForNexacroLoad, getFormComponents,
+//    clickComponent, setValue, getValue, getDatasetData, selectComboItem,
+//    selectGridRow, isPopupOpen, waitForPopup, clickTopMenu, clickByCoordinates,
+//    getGlobalVariable), 인터페이스(NexacroComponent, NexacroFormPath),
+//   내부 헬퍼(getNexacroMain) 를 caller 0건 확인 후 삭제.
+// 아래는 실사용되는 MDI 패턴 헬퍼(openMenuById + FrameSet[menuId].form.div_workForm)만 유지.
+// ─────────────────────────────────────────────────────────────────────────────
 
-export interface NexacroFormPath {
-  mainframe: string;
-  vFrameSet: string;
-  hFrameSet: string;
-  vFrameSet2: string;
-  frameSet: string;
-  mainFrame: string;
-  main: string;
-  popup?: string;
-}
-
-/**
- * Nexacro 프레임을 찾아 반환
- * URL 경로는 ${CTX_PATH} 로 구성
- */
-export async function findNexacroFrame(page: Page): Promise<Frame | null> {
-  const frames = page.frames();
-  return (
-    frames.find(
-      (f) => f.url().includes('nxui') || f.url().includes('nexacro')
-    ) || null
-  );
-}
-
-/**
- * Nexacro Application 객체 존재 여부 확인
- */
-export async function isNexacroLoaded(frame: Frame): Promise<boolean> {
-  return await frame.evaluate(() => {
-    return (
-      typeof (window as any).nexacro !== 'undefined' &&
-      (window as any).nexacro.getApplication !== undefined
-    );
-  });
-}
-
-/**
- * Nexacro 앱 로드 대기
- */
-export async function waitForNexacroLoad(
-  page: Page,
-  timeout: number = 30000
-): Promise<Frame | null> {
-  const startTime = Date.now();
-
-  while (Date.now() - startTime < timeout) {
-    const frame = await findNexacroFrame(page);
-    if (frame) {
-      const loaded = await isNexacroLoaded(frame);
-      if (loaded) {
-        return frame;
-      }
-    }
-    await page.waitForTimeout(500);
-  }
-
-  return null;
-}
-
-/**
- * Nexacro Application 객체 가져오기 (내부 헬퍼)
- * Nexacro 프레임 구조:
- *   mainframe > VFrameSet > HFrameSet > VFrameSet > FrameSet > MainFrame > main
- */
-function getNexacroMain(
-  context: Window & typeof globalThis,
-  popupName?: string
-): any {
-  const app = (context as any).nexacro.getApplication();
-  const main =
-    app.mainframe.VFrameSet.HFrameSet.VFrameSet.FrameSet.MainFrame.main;
-  return popupName ? main[popupName] : main;
-}
-
-/**
- * Nexacro 폼의 컴포넌트 목록 가져오기
- */
-export async function getFormComponents(
-  frame: Frame,
-  popupName?: string
-): Promise<NexacroComponent[]> {
-  return await frame.evaluate((popup) => {
-    try {
-      const app = (window as any).nexacro.getApplication();
-      const main =
-        app.mainframe.VFrameSet.HFrameSet.VFrameSet.FrameSet.MainFrame.main;
-      const form = popup ? main[popup]?.form : main.form;
-
-      if (!form) return [];
-
-      const components: any[] = [];
-      for (const key in form) {
-        const comp = form[key];
-        if (comp && typeof comp === 'object' && comp.constructor) {
-          components.push({
-            name: key,
-            type: comp.constructor.name || 'unknown',
-            value: comp.value,
-            visible: comp.visible,
-          });
-        }
-      }
-      return components;
-    } catch (e) {
-      return [];
-    }
-  }, popupName);
-}
-
-/**
- * Nexacro 컴포넌트 클릭
- */
-export async function clickComponent(
-  frame: Frame,
-  componentName: string,
-  popupName?: string
-): Promise<boolean> {
-  return await frame.evaluate(
-    ({ componentName, popupName }) => {
-      try {
-        const app = (window as any).nexacro.getApplication();
-        const main =
-          app.mainframe.VFrameSet.HFrameSet.VFrameSet.FrameSet.MainFrame.main;
-        const form = popupName ? main[popupName]?.form : main.form;
-        const component = form?.[componentName];
-
-        if (component?.click) {
-          component.click();
-          return true;
-        }
-        return false;
-      } catch (e) {
-        return false;
-      }
-    },
-    { componentName, popupName }
-  );
-}
-
-/**
- * Nexacro 입력 필드에 값 설정
- */
-export async function setValue(
-  frame: Frame,
-  fieldName: string,
-  value: string | number | boolean,
-  popupName?: string
-): Promise<boolean> {
-  return await frame.evaluate(
-    ({ fieldName, value, popupName }) => {
-      try {
-        const app = (window as any).nexacro.getApplication();
-        const main =
-          app.mainframe.VFrameSet.HFrameSet.VFrameSet.FrameSet.MainFrame.main;
-        const form = popupName ? main[popupName]?.form : main.form;
-        const field = form?.[fieldName];
-
-        if (field?.set_value) {
-          field.set_value(value);
-          return true;
-        }
-        return false;
-      } catch (e) {
-        return false;
-      }
-    },
-    { fieldName, value, popupName }
-  );
-}
-
-/**
- * Nexacro 필드 값 가져오기
- */
-export async function getValue(
-  frame: Frame,
-  fieldName: string,
-  popupName?: string
-): Promise<any> {
-  return await frame.evaluate(
-    ({ fieldName, popupName }) => {
-      try {
-        const app = (window as any).nexacro.getApplication();
-        const main =
-          app.mainframe.VFrameSet.HFrameSet.VFrameSet.FrameSet.MainFrame.main;
-        const form = popupName ? main[popupName]?.form : main.form;
-        const field = form?.[fieldName];
-        return field?.value ?? null;
-      } catch (e) {
-        return null;
-      }
-    },
-    { fieldName, popupName }
-  );
-}
-
-/**
- * Nexacro Dataset 데이터 가져오기
- */
-export async function getDatasetData(
-  frame: Frame,
-  datasetName: string,
-  popupName?: string
-): Promise<any[]> {
-  return await frame.evaluate(
-    ({ datasetName, popupName }) => {
-      try {
-        const app = (window as any).nexacro.getApplication();
-        const main =
-          app.mainframe.VFrameSet.HFrameSet.VFrameSet.FrameSet.MainFrame.main;
-        const form = popupName ? main[popupName]?.form : main.form;
-        const dataset = form?.[datasetName];
-
-        if (!dataset) return [];
-
-        const data: any[] = [];
-        const rowCount = dataset.rowcount || 0;
-        const colCount = dataset.colcount || 0;
-
-        for (let i = 0; i < rowCount; i++) {
-          const row: any = {};
-          for (let j = 0; j < colCount; j++) {
-            const colName = dataset.getColID(j);
-            row[colName] = dataset.getColumn(i, colName);
-          }
-          data.push(row);
-        }
-        return data;
-      } catch (e) {
-        return [];
-      }
-    },
-    { datasetName, popupName }
-  );
-}
-
-/**
- * Nexacro Combo 선택
- */
-export async function selectComboItem(
-  frame: Frame,
-  comboName: string,
-  value: string,
-  popupName?: string
-): Promise<boolean> {
-  return await frame.evaluate(
-    ({ comboName, value, popupName }) => {
-      try {
-        const app = (window as any).nexacro.getApplication();
-        const main =
-          app.mainframe.VFrameSet.HFrameSet.VFrameSet.FrameSet.MainFrame.main;
-        const form = popupName ? main[popupName]?.form : main.form;
-        const combo = form?.[comboName];
-
-        if (combo?.set_value) {
-          combo.set_value(value);
-          return true;
-        }
-        return false;
-      } catch (e) {
-        return false;
-      }
-    },
-    { comboName, value, popupName }
-  );
-}
-
-/**
- * Nexacro Grid 행 선택
- */
-export async function selectGridRow(
-  frame: Frame,
-  gridName: string,
-  rowIndex: number,
-  popupName?: string
-): Promise<boolean> {
-  return await frame.evaluate(
-    ({ gridName, rowIndex, popupName }) => {
-      try {
-        const app = (window as any).nexacro.getApplication();
-        const main =
-          app.mainframe.VFrameSet.HFrameSet.VFrameSet.FrameSet.MainFrame.main;
-        const form = popupName ? main[popupName]?.form : main.form;
-        const grid = form?.[gridName];
-
-        if (grid) {
-          const dsName = grid.binddataset;
-          const dataset = form[dsName];
-          if (dataset) {
-            dataset.set_rowposition(rowIndex);
-            return true;
-          }
-        }
-        return false;
-      } catch (e) {
-        return false;
-      }
-    },
-    { gridName, rowIndex, popupName }
-  );
-}
-
-/**
- * 팝업 존재 여부 확인
- */
-export async function isPopupOpen(
-  frame: Frame,
-  popupName: string
-): Promise<boolean> {
-  return await frame.evaluate((popupName) => {
-    try {
-      const app = (window as any).nexacro.getApplication();
-      const main =
-        app.mainframe.VFrameSet.HFrameSet.VFrameSet.FrameSet.MainFrame.main;
-      const popup = main[popupName];
-      return popup !== undefined && popup.visible !== false;
-    } catch (e) {
-      return false;
-    }
-  }, popupName);
-}
-
-/**
- * 팝업이 열릴 때까지 대기
- */
-export async function waitForPopup(
-  frame: Frame,
-  popupName: string,
-  timeout: number = 10000
-): Promise<boolean> {
-  const startTime = Date.now();
-  while (Date.now() - startTime < timeout) {
-    const open = await isPopupOpen(frame, popupName);
-    if (open) return true;
-    await new Promise((r) => setTimeout(r, 300));
-  }
-  return false;
-}
-
-/**
- * 상단/좌측 메뉴 클릭 (goUrl 호출 방식)
- * 메뉴 구조에 맞게 수정 필요
- */
-export async function clickTopMenu(
-  page: Page,
-  menuType: string,
-  menuId: string
-): Promise<boolean> {
-  // ✏️ 메뉴 프레임 URL 패턴에 맞게 수정하세요
-  const menuFrame =
-    page.frames().find((f) => f.url().includes('eipTop.do') || f.url().includes('menu')) ||
-    null;
-
-  if (!menuFrame) {
-    console.warn('메뉴 프레임을 찾지 못했습니다. URL 패턴을 확인하세요.');
-    return false;
-  }
-
-  return await menuFrame.evaluate(
-    ({ menuType, menuId }) => {
-      try {
-        (window as any).goUrl(menuType, menuId);
-        return true;
-      } catch (e) {
-        return false;
-      }
-    },
-    { menuType, menuId }
-  );
-}
-
-/**
- * DOM 요소 좌표로 클릭 (Nexacro canvas 위의 요소)
- */
-export async function clickByCoordinates(
-  frame: Frame,
-  selector: string
-): Promise<{ x: number; y: number } | null> {
-  const coords = await frame.evaluate((selector) => {
-    const element = document.querySelector(selector);
-    if (element) {
-      const rect = element.getBoundingClientRect();
-      return {
-        x: rect.x + rect.width / 2,
-        y: rect.y + rect.height / 2,
-      };
-    }
-    return null;
-  }, selector);
-
-  return coords;
-}
-
-/**
- * Nexacro 전역 변수(gv_) 값 가져오기
- * gv_domain, gv_upMenuId 등 전역 변수를 사용
- */
-export async function getGlobalVariable(
-  frame: Frame,
-  varName: string
-): Promise<any> {
-  return await frame.evaluate((varName) => {
-    try {
-      const app = (window as any).nexacro.getApplication();
-      return app[varName] ?? null;
-    } catch (e) {
-      return null;
-    }
-  }, varName);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Nexacro 헬퍼 (openMenuById + MDI 패턴 기반, hrm_0130 검증 완료)
@@ -1368,10 +962,18 @@ export async function parseNexacroResponse(
 
   // < 는 < 의 유니코드 이스케이프 — 실제 body의 <Root 와 동일
   // 따라서 /<Root/ 정규식으로 두 형태 모두 매치 가능
-  const hasRoot       = /<Root|<Root/i.test(body);
+  const hasXmlRoot = /<Root|<Root/i.test(body);
+  // Nexacro는 XML뿐 아니라 "SSV"(제어문자로 구분된 컴팩트) 포맷으로도 정상 응답을 보낸다 —
+  // 응답이 큰(행이 많은) 조회일 때 서버가 이 포맷을 자주 선택하는 것으로 보인다. body 앞부분이
+  // "SSV:<인코딩>"으로 시작하면 이것도 정상적인 Nexacro 응답으로 인정한다.
+  // (2026-07-21 진단: HRM_0130M getList가 ErrorCode:int=0 + 실제 데이터 13건을 SSV로 응답했는데
+  //  <Root 태그가 없다는 이유만으로 FAIL 처리되고 있었음 — parseNexacroXmlRows()도 함께 SSV 지원 추가.)
+  const isSsv      = /^SSV:/i.test(body.trimStart());
+  const hasRoot    = hasXmlRoot || isSsv;
   const hasCsrfError  = body.includes('CSRF ERROR');
   // type="int" 등 추가 속성이 있는 경우도 포함: <Parameter id="ErrorCode" type="int">-1
-  const hasErrorCode  = /ErrorCode="-1"|<Parameter id="ErrorCode"[^>]*>-1/.test(body);
+  // SSV 포맷의 "ErrorCode:int=-1"도 함께 인식
+  const hasErrorCode  = /ErrorCode="-1"|<Parameter id="ErrorCode"[^>]*>-1|ErrorCode:\w+=-1\b/.test(body);
   // ORA-XXXXX — Oracle DB 오류. ErrorCode="-1"로 정상 래핑되지 않고 ErrorMsg/스택트레이스에만
   // 노출되는 경우(예: 500 에러 페이지, 잘못 처리된 예외)까지 잡기 위해 body 전체를 대상으로 검사.
   const hasOraError   = /ORA-\d{4,6}/i.test(body);
@@ -1379,7 +981,7 @@ export async function parseNexacroResponse(
   const reasons: string[] = [];
   let oraReason = '';
   if (status !== 200)    reasons.push(`HTTP ${status} (200 아님)`);
-  if (!hasRoot)          reasons.push('응답 body에 <Root 없음 — Nexacro XML 아님 (로그인 페이지 리다이렉트 가능성)');
+  if (!hasRoot)          reasons.push('응답 body에 <Root/SSV 없음 — Nexacro 형식 아님 (로그인 페이지 리다이렉트 가능성)');
   if (hasCsrfError)      reasons.push('CSRF ERROR — storageState 만료 또는 PGM_ID 누락');
   if (hasErrorCode)      reasons.push('ErrorCode="-1" — 서버 비즈니스 로직 오류');
   if (hasOraError) {
@@ -1458,9 +1060,63 @@ export async function assertNexacroResponse(
 }
 
 /**
- * Nexacro XML 응답 body에서 DataSet 행을 파싱하여 Record 배열로 반환합니다.
+ * Nexacro SSV(제어문자로 구분되는 컴팩트 텍스트) 응답 body에서 지정 Dataset의 행을 파싱합니다.
  *
- * @param body      - Nexacro XML 응답 문자열 (assertNexacroResponse의 result.body)
+ * 실제 관측된 구조(2026-07-21, HRM_0130M getList 응답 hex 덤프로 역추적):
+ * ```
+ * SSV:UTF-8␞ErrorCode:int=0␞Dataset:ds_list␞_RowType_␟COL1:type(size)␟COL2:type(size)...␞
+ * N␟값1␟값2␟...␞N␟값1␟값2␟...␞...
+ * ```
+ * - `␞`(U+001E, RS)  — 최상위 섹션 구분자이면서 Dataset 내 행(Row) 구분자로도 재사용됨
+ * - `␟`(U+001F, US)  — 한 섹션/행 안의 필드 구분자
+ * - ``(ETX)    — 빈 값(NULL) 마커
+ * - 행의 첫 필드는 컬럼이 아니라 rowType(N=정상 등) 플래그이므로 건너뛴다.
+ */
+function parseSsvDatasetRows(body: string, datasetId?: string): Record<string, string>[] {
+  const RS  = String.fromCharCode(0x1e); // Record Separator - section/row delimiter
+  const US  = String.fromCharCode(0x1f); // Unit Separator - field delimiter
+  const NUL = String.fromCharCode(0x03); // ETX - empty/NULL marker
+
+  const parts = body.split(RS).filter(p => p.length > 0);
+  const rows: Record<string, string>[] = [];
+
+  let currentId: string | null = null;
+  let targetId  = datasetId ?? null; // 미지정 시 처음 만나는 Dataset로 확정
+  let columns: string[] | null = null;
+
+  for (const part of parts) {
+    const dsMatch = part.match(/^Dataset:(.+)$/);
+    if (dsMatch) {
+      currentId = dsMatch[1];
+      if (targetId === null) targetId = currentId;
+      columns = null; // 다음 파트가 컬럼 헤더
+      continue;
+    }
+    if (/^(?:ErrorCode|ErrorMsg|SSV):/i.test(part)) continue; // 파라미터/매직 라인
+    if (currentId === null || currentId !== targetId) continue; // 관심 대상 Dataset 아님
+
+    const fields = part.split(US);
+    if (columns === null) {
+      // 헤더: _RowType_␟COL1:type(size)␟COL2:type(size)...
+      columns = fields.slice(1).map(f => f.split(':')[0]);
+      continue;
+    }
+    const values = fields.slice(1); // 첫 필드(rowType) 제외
+    const row: Record<string, string> = {};
+    columns.forEach((col, i) => {
+      const v = values[i];
+      row[col] = (v === undefined || v === NUL) ? '' : v;
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
+/**
+ * Nexacro 응답 body에서 DataSet 행을 파싱하여 Record 배열로 반환합니다.
+ * XML(`<DataSet>`)과 SSV(제어문자 구분) 두 응답 포맷을 모두 지원합니다.
+ *
+ * @param body      - Nexacro 응답 문자열 (assertNexacroResponse의 result.body)
  * @param datasetId - 파싱할 Dataset ID (미지정 시 첫 번째 DataSet)
  *
  * @example
@@ -1472,6 +1128,9 @@ export function parseNexacroXmlRows(
   body: string,
   datasetId?: string
 ): Record<string, string>[] {
+  if (/^SSV:/i.test(body.trimStart())) {
+    return parseSsvDatasetRows(body, datasetId);
+  }
   try {
     // DataSet 섹션 추출 — 태그명 대소문자 무시
     const dsRe = datasetId
@@ -1529,20 +1188,4 @@ export default {
   parseNexacroResponse,
   assertNexacroResponse,
   parseNexacroXmlRows,
-  // ── 레거시 (Frame 기반, 이 시스템에서 동작 미보장) ───────────────────────
-  findNexacroFrame,
-  isNexacroLoaded,
-  waitForNexacroLoad,
-  getFormComponents,
-  clickComponent,
-  setValue,
-  getValue,
-  getDatasetData,
-  selectComboItem,
-  selectGridRow,
-  isPopupOpen,
-  waitForPopup,
-  clickTopMenu,
-  clickByCoordinates,
-  getGlobalVariable,
 };
